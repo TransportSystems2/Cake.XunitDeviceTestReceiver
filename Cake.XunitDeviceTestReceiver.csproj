@@ -3,8 +3,8 @@
     <TargetFramework>netstandard2.0</TargetFramework>
   </PropertyGroup>
   <PropertyGroup>
-    <PackageId>Cacke.XunitDeviceTestReceiver</PackageId>
-    <Version>1.0.0</Version>
+    <PackageId>Cake.XunitDeviceTestReceiver</PackageId>
+    <Version>1.0.2</Version>
     <Authors>alexandrfadeev</Authors>
     <Company>TransportSystems</Company>
   </PropertyGroup>

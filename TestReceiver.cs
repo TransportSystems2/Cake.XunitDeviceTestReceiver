@@ -7,86 +7,83 @@ using Cake.Core;
 using Cake.Core.Annotations;
 using Cake.Common.Diagnostics;
 
-namespace DeviceXunitTestReceiver
-{/// <summary>
-    /// Contains methods pertaining to collecting results from devices.xunit test hosts running on devices.
+/// <summary>
+/// Contains methods pertaining to collecting results from devices.xunit test hosts running on devices.
+/// </summary>
+public static class TestReceiver
+{
+    /// <summary>
+    /// Listens for a connection from the device running the tests,
+    /// it then processes the results and returns either true or false depending on if all tests have passed.
     /// </summary>
-    [CakeAliasCategory("DeviceXunitTestReceiver")]
-    public static class TestReceiver
+    /// <param name="context">Cake context.</param>
+    /// <param name="port">Port to listen on.</param>
+    /// <returns></returns>
+    [CakeMethodAlias]
+    public static Task<bool> LaunchEmbeddedTestsReceiver(this ICakeContext context, int port)
     {
-        /// <summary>
-        /// Listens for a connection from the device running the tests,
-        /// it then processes the results and returns either true or false depending on if all tests have passed.
-        /// </summary>
-        /// <param name="context">Cake context.</param>
-        /// <param name="port">Port to listen on.</param>
-        /// <returns></returns>
-        [CakeMethodAlias]
-        public static Task<bool> LaunchEmbeddedTestsReceiver(ICakeContext context, int port)
-        {
-            var testsPassedCompletionSource = new TaskCompletionSource<bool>();
-            
-            AcceptNextConnectionThenExit(context, IPAddress.Loopback, port,
-                async tcpClient =>
+        var testsPassedCompletionSource = new TaskCompletionSource<bool>();
+        
+        AcceptNextConnectionThenExit(context, IPAddress.Loopback, port,
+            async tcpClient =>
+            {
+                var clientEndPoint = tcpClient.Client.RemoteEndPoint.ToString();
+                Console.WriteLine("Received connection request from "
+                                    + clientEndPoint);
+                try 
                 {
-                    var clientEndPoint = tcpClient.Client.RemoteEndPoint.ToString();
-                    Console.WriteLine("Received connection request from "
-                                      + clientEndPoint);
-                    try 
+                    var networkStream = tcpClient.GetStream();
+                    var reader = new StreamReader(networkStream);
+                    var lastDataReceived = "";
+                    while (true)
                     {
-                        var networkStream = tcpClient.GetStream();
-                        var reader = new StreamReader(networkStream);
-                        var lastDataReceived = "";
-                        while (true)
+                        var testData = await reader.ReadLineAsync();
+                        if (testData != null)
                         {
-                            var testData = await reader.ReadLineAsync();
-                            if (testData != null)
+                            if (testData.Contains("[FAIL]"))
                             {
-                                if (testData.Contains("[FAIL]"))
-                                {
-                                    context.Warning(testData);
-                                }
-                                else
-                                {
-                                    context.Information(testData);
-                                }
-                                lastDataReceived = testData;
+                                context.Warning(testData);
                             }
-                            else // Client closed connection
+                            else
                             {
-                                if (tcpClient.Connected)
-                                    tcpClient.Close();
+                                context.Information(testData);
+                            }
+                            lastDataReceived = testData;
+                        }
+                        else // Client closed connection
+                        {
+                            if (tcpClient.Connected)
+                                tcpClient.Close();
 
-                                var result = lastDataReceived.Contains("Failed: 0");
-                                testsPassedCompletionSource.SetResult(result);
-                                return;
-                            }
+                            var result = lastDataReceived.Contains("Failed: 0");
+                            testsPassedCompletionSource.SetResult(result);
+                            return;
                         }
                     }
-                    catch (Exception e) 
-                    {
-                        context.Error(e.Message);
-                        if (tcpClient.Connected)
-                            tcpClient.Close();
-
-                        testsPassedCompletionSource.SetException(e);
-                    }
-                });
-            return testsPassedCompletionSource.Task;
-        }
-
-        private static void AcceptNextConnectionThenExit(ICakeContext context, IPAddress ipAddress, int port, Func<TcpClient, Task> processTests)
-        {
-            var listener = new TcpListener(ipAddress, port);
-            listener.Start();
-            context.Information($"Test receiver is now running on {ipAddress}:{port}");
-            Task.Run(
-                async () =>
+                }
+                catch (Exception e) 
                 {
-                    var tcpClient = await listener.AcceptTcpClientAsync();
-                    await processTests(tcpClient);
-                    listener.Stop();
-                });
-        }
+                    context.Error(e.Message);
+                    if (tcpClient.Connected)
+                        tcpClient.Close();
+
+                    testsPassedCompletionSource.SetException(e);
+                }
+            });
+        return testsPassedCompletionSource.Task;
+    }
+
+    private static void AcceptNextConnectionThenExit(ICakeContext context, IPAddress ipAddress, int port, Func<TcpClient, Task> processTests)
+    {
+        var listener = new TcpListener(ipAddress, port);
+        listener.Start();
+        context.Information($"Test receiver is now running on {ipAddress}:{port}");
+        Task.Run(
+            async () =>
+            {
+                var tcpClient = await listener.AcceptTcpClientAsync();
+                await processTests(tcpClient);
+                listener.Stop();
+            });
     }
 }
