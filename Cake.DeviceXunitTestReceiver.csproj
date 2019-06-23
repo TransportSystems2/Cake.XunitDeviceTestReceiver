@@ -3,7 +3,7 @@
     <TargetFramework>netstandard2.0</TargetFramework>
   </PropertyGroup>
   <PropertyGroup>
-    <PackageId>XunitDeviceTestReceiver</PackageId>
+    <PackageId>Cacke.XunitDeviceTestReceiver</PackageId>
     <Version>1.0.0</Version>
     <Authors>alexandrfadeev</Authors>
     <Company>TransportSystems</Company>
